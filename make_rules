@@ -1,0 +1,98 @@
+#
+# Yes, this is almost, but not quite, completely like to 
+# DKP's base_rules and gba_rules
+#
+
+export PATH	:=	$(DEVKITARM)/bin:$(PATH)
+
+LIBGBA		?=	$(DEVKITPRO)/libgba
+
+# --- Executable names ---
+
+PREFIX		?=	arm-eabi-
+
+export CC	:=	$(PREFIX)gcc
+export CXX	:=	$(PREFIX)g++
+export AS	:=	$(PREFIX)gcc
+export AR	:=	$(PREFIX)ar
+export OBJCOPY	:=	$(PREFIX)objcopy
+
+# LD defined in Makefile
+
+
+# === LINK / TRANSLATE ================================================
+
+%.gba : %.elf
+	@$(OBJCOPY) -O binary $< $@
+	@echo built ... $(notdir $@)
+	@gbafix $@ -t$(TITLE)
+
+#----------------------------------------------------------------------
+
+%.mb.elf :
+	@echo Linking multiboot
+	$(LD) -specs=gba_mb.specs $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+
+#----------------------------------------------------------------------
+
+%.elf :
+	@echo Linking cartridge
+	$(LD) -specs=gba.specs $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+	
+
+#----------------------------------------------------------------------
+
+%.a :
+	@echo $(notdir $@)
+	@rm -f $@
+	$(AR) -crs $@ $^
+
+
+# === OBJECTIFY =======================================================
+
+%.iwram.o : %.iwram.cpp
+	@echo $(notdir $<)
+	$(CXX) -MMD -MP -MF $(DEPSDIR)/$*.d $(CXXFLAGS) $(IARCH) -c $< -o $@
+	
+#----------------------------------------------------------------------
+%.iwram.o : %.iwram.c
+	@echo $(notdir $<)
+	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d $(CFLAGS) $(IARCH) -c $< -o $@
+
+#----------------------------------------------------------------------
+
+%.o : %.cpp
+	@echo $(notdir $<)
+	$(CXX) -MMD -MP -MF $(DEPSDIR)/$*.d $(CXXFLAGS) $(RARCH) -c $< -o $@
+
+#----------------------------------------------------------------------
+
+%.o : %.c
+	@echo $(notdir $<)
+	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d $(CFLAGS) $(RARCH) -c $< -o $@
+
+#----------------------------------------------------------------------
+
+%.o : %.s
+	@echo $(notdir $<)
+	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS) -c $< -o $@
+
+#----------------------------------------------------------------------
+
+%.o : %.S
+	@echo $(notdir $<)
+	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS) -c $< -o $@
+
+
+#----------------------------------------------------------------------
+# canned command sequence for binary data
+#----------------------------------------------------------------------
+
+define bin2o
+	bin2s $< | $(AS) $(ARCH) -o $@
+	echo "extern const u8" `(echo $(<F) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`"_end[];" > `(echo $(<F) | tr . _)`.h
+	echo "extern const u8" `(echo $(<F) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`"[];" >> `(echo $(<F) | tr . _)`.h
+	echo "extern const u32" `(echo $(<F) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`_size";" >> `(echo $(<F) | tr . _)`.h
+endef
+
+
